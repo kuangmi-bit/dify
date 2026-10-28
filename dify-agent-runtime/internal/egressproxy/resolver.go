@@ -6,6 +6,7 @@ package egressproxy
 
 import (
 	"log"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -101,10 +102,14 @@ func (r *Resolver) ResolveFor(sessionID, ref string) *StoredCredential {
 func (r *Resolver) InjectHeadersFor(sessionID string, req *http.Request) {
 	host := req.URL.Hostname()
 	if host == "" {
-		host = req.Host
-	}
-	if idx := strings.LastIndex(host, ":"); idx >= 0 {
-		host = host[:idx]
+		// req.Host can carry a port (proxy-style requests), so strip it here
+		// rather than on the URL path: Hostname() has already removed it, and
+		// truncating at the last colon mangles IPv6 literals ("::1" -> ":").
+		if h, _, err := net.SplitHostPort(req.Host); err == nil {
+			host = h
+		} else {
+			host = req.Host
+		}
 	}
 
 	r.mu.RLock()
